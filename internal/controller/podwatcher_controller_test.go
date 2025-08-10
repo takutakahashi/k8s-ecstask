@@ -28,13 +28,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+const defaultNamespace = "default"
+
 var _ = Describe("PodWatcher Controller", func() {
 	Context("When reconciling Pods with watch label", func() {
 		ctx := context.Background()
 
 		It("should reconcile Pod with example.com/watch label", func() {
 			podName := "test-pod-with-label"
-			namespace := "default"
+			namespace := defaultNamespace
 
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -81,7 +83,7 @@ var _ = Describe("PodWatcher Controller", func() {
 
 		It("should not reconcile Pod without watch label", func() {
 			podName := "test-pod-without-label"
-			namespace := "default"
+			namespace := defaultNamespace
 
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -118,7 +120,7 @@ var _ = Describe("PodWatcher Controller", func() {
 
 		It("should handle Pod deletion gracefully", func() {
 			podName := "test-pod-deletion"
-			namespace := "default"
+			namespace := defaultNamespace
 
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{

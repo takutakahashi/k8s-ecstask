@@ -73,7 +73,7 @@ var _ = Describe("Pod Webhook", func() {
 
 			By("checking that the Pod creation is blocked")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Pods with label 'example.com/watch' are not allowed"))
+			Expect(err.Error()).To(ContainSubstring("pods with label 'example.com/watch' are not allowed"))
 		})
 
 		It("Should also block Pod with watch label and additional annotations", func() {
@@ -105,7 +105,7 @@ var _ = Describe("Pod Webhook", func() {
 
 			By("checking that the Pod creation is blocked")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Pods with label 'example.com/watch' are not allowed"))
+			Expect(err.Error()).To(ContainSubstring("pods with label 'example.com/watch' are not allowed"))
 		})
 
 		It("Should ignore Pod without watch label", func() {
