@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/example/pod-controller/internal/controller"
+	webhookv1 "github.com/example/pod-controller/internal/webhook/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -206,6 +207,13 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PodWatcher")
 		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookv1.SetupPodWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Pod")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 
