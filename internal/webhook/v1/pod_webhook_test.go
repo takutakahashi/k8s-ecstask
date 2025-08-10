@@ -48,7 +48,7 @@ var _ = Describe("Pod Webhook", func() {
 	})
 
 	Context("When creating Pod under Defaulting Webhook", func() {
-		It("Should allow Pod with watch label and add controlled annotation", func() {
+		It("Should block Pod with watch label", func() {
 			By("creating a Pod with watch label")
 			obj = &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -71,24 +71,23 @@ var _ = Describe("Pod Webhook", func() {
 			By("calling the Default method")
 			err := defaulter.Default(context.Background(), obj)
 
-			By("checking that the Pod is allowed and annotations are added")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(obj.Annotations).NotTo(BeNil())
-			Expect(obj.Annotations["example.com/controlled"]).To(Equal("true"))
-			Expect(obj.Annotations["example.com/webhook-processed"]).To(Equal("mutating-webhook"))
+			By("checking that the Pod creation is blocked")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Pods with label 'example.com/watch' are not allowed"))
 		})
 
-		It("Should block Pod with block annotation", func() {
-			By("creating a Pod with block annotation")
+		It("Should also block Pod with watch label and additional annotations", func() {
+			By("creating a Pod with watch label and other annotations")
 			obj = &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "blocked-pod",
 					Namespace: "default",
 					Labels: map[string]string{
 						"example.com/watch": "true",
+						"app":               "test",
 					},
 					Annotations: map[string]string{
-						"example.com/block": "true",
+						"some-annotation": "value",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -106,7 +105,7 @@ var _ = Describe("Pod Webhook", func() {
 
 			By("checking that the Pod creation is blocked")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Pod creation blocked by example.com/block annotation"))
+			Expect(err.Error()).To(ContainSubstring("Pods with label 'example.com/watch' are not allowed"))
 		})
 
 		It("Should ignore Pod without watch label", func() {

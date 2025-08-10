@@ -61,24 +61,10 @@ func (d *PodCustomDefaulter) Default(_ context.Context, obj runtime.Object) erro
 		return fmt.Errorf("expected an Pod object but got %T", obj)
 	}
 
-	// Check if Pod has the watch label
+	// Check if Pod has the watch label - if so, block its creation
 	if _, hasWatchLabel := pod.Labels["example.com/watch"]; hasWatchLabel {
-		podlog.Info("Pod with watch label is being created", "name", pod.GetName(), "namespace", pod.GetNamespace())
-
-		// Check if Pod should be blocked (example: if it has a specific annotation)
-		if blockValue, hasBlockAnnotation := pod.Annotations["example.com/block"]; hasBlockAnnotation && blockValue == "true" {
-			podlog.Info("Blocking Pod creation due to block annotation", "name", pod.GetName(), "namespace", pod.GetNamespace())
-			return fmt.Errorf("Pod creation blocked by example.com/block annotation")
-		}
-
-		// Add controlled annotation to mark this Pod as processed by webhook
-		if pod.Annotations == nil {
-			pod.Annotations = make(map[string]string)
-		}
-		pod.Annotations["example.com/controlled"] = "true"
-		pod.Annotations["example.com/webhook-processed"] = "mutating-webhook"
-
-		podlog.Info("Pod with watch label processed and allowed", "name", pod.GetName(), "namespace", pod.GetNamespace())
+		podlog.Info("Blocking Pod creation due to watch label", "name", pod.GetName(), "namespace", pod.GetNamespace())
+		return fmt.Errorf("Pod creation blocked: Pods with label 'example.com/watch' are not allowed")
 	}
 
 	return nil
