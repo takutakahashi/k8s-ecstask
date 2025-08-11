@@ -105,12 +105,12 @@ func main() {
 
 シークレットとConfigMapは以下のようにParameter Storeパスにマッピングされます：
 
-- **Secret**: `{ParameterStorePrefix}/secrets/{secretName}/{key}`
-- **ConfigMap**: `{ParameterStorePrefix}/configmaps/{configMapName}/{key}`
+- **Secret**: `{ParameterStorePrefix}/{namespace}/secrets/{secretName}/{key}`
+- **ConfigMap**: `{ParameterStorePrefix}/{namespace}/configmaps/{configMapName}/{key}`
 
 例：
-- Secret `db-credentials` の `password` キー → `/myapp/secrets/db-credentials/password`
-- ConfigMap `app-config` の `config.yaml` キー → `/myapp/configmaps/app-config/config.yaml`
+- Secret `db-credentials` の `password` キー （`production` namespace） → `/myapp/production/secrets/db-credentials/password`
+- ConfigMap `app-config` の `config.yaml` キー （`default` namespace） → `/myapp/default/configmaps/app-config/config.yaml`
 
 ## コンバージョンオプション
 

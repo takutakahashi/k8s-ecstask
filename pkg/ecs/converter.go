@@ -34,7 +34,7 @@ func NewConverter(options ConversionOptions) *Converter {
 }
 
 // Convert converts a Kubernetes PodSpec and ECSConfig to an ECS task definition
-func (c *Converter) Convert(podSpec *corev1.PodSpec, ecsConfig *ECSConfig) (*ECSTaskDefinition, error) {
+func (c *Converter) Convert(podSpec *corev1.PodSpec, ecsConfig *ECSConfig, namespace string) (*ECSTaskDefinition, error) {
 	taskDef := &ECSTaskDefinition{
 		Family:                  ecsConfig.Family,
 		TaskRoleArn:            c.getTaskRoleArn(ecsConfig),
@@ -46,7 +46,7 @@ func (c *Converter) Convert(podSpec *corev1.PodSpec, ecsConfig *ECSConfig) (*ECS
 	}
 
 	// Convert containers
-	containerDefs, err := c.convertContainers(podSpec.Containers, false)
+	containerDefs, err := c.convertContainers(podSpec.Containers, namespace, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert containers: %w", err)
 	}
@@ -107,11 +107,11 @@ func (c *Converter) getRequiresCompatibilities(ecsConfig *ECSConfig) []string {
 	return []string{"FARGATE"}
 }
 
-func (c *Converter) convertContainers(containers []corev1.Container, isInit bool) ([]ECSContainerDefinition, error) {
+func (c *Converter) convertContainers(containers []corev1.Container, namespace string, isInit bool) ([]ECSContainerDefinition, error) {
 	var containerDefs []ECSContainerDefinition
 
 	for _, container := range containers {
-		containerDef, err := c.convertContainer(container, !isInit)
+		containerDef, err := c.convertContainer(container, namespace, !isInit)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert container %s: %w", container.Name, err)
 		}
@@ -121,7 +121,7 @@ func (c *Converter) convertContainers(containers []corev1.Container, isInit bool
 	return containerDefs, nil
 }
 
-func (c *Converter) convertContainer(container corev1.Container, essential bool) (*ECSContainerDefinition, error) {
+func (c *Converter) convertContainer(container corev1.Container, namespace string, essential bool) (*ECSContainerDefinition, error) {
 	containerDef := &ECSContainerDefinition{
 		Name:      container.Name,
 		Image:     container.Image,
@@ -150,7 +150,7 @@ func (c *Converter) convertContainer(container corev1.Container, essential bool)
 	}
 
 	// Convert environment variables and secrets
-	if err := c.convertEnvironment(container, containerDef); err != nil {
+	if err := c.convertEnvironment(container, containerDef, namespace); err != nil {
 		return nil, fmt.Errorf("failed to convert environment: %w", err)
 	}
 
@@ -213,7 +213,7 @@ func (c *Converter) convertResources(container corev1.Container, containerDef *E
 	return nil
 }
 
-func (c *Converter) convertEnvironment(container corev1.Container, containerDef *ECSContainerDefinition) error {
+func (c *Converter) convertEnvironment(container corev1.Container, containerDef *ECSContainerDefinition, namespace string) error {
 	var environment []ECSKeyValuePair
 	var secrets []ECSSecret
 
@@ -223,13 +223,13 @@ func (c *Converter) convertEnvironment(container corev1.Container, containerDef 
 			if env.ValueFrom.SecretKeyRef != nil {
 				secret := ECSSecret{
 					Name:      env.Name,
-					ValueFrom: c.getParameterStorePathForSecret(env.ValueFrom.SecretKeyRef.Name, env.ValueFrom.SecretKeyRef.Key),
+					ValueFrom: c.getParameterStorePathForSecret(namespace, env.ValueFrom.SecretKeyRef.Name, env.ValueFrom.SecretKeyRef.Key),
 				}
 				secrets = append(secrets, secret)
 			} else if env.ValueFrom.ConfigMapKeyRef != nil {
 				secret := ECSSecret{
 					Name:      env.Name,
-					ValueFrom: c.getParameterStorePathForConfigMap(env.ValueFrom.ConfigMapKeyRef.Name, env.ValueFrom.ConfigMapKeyRef.Key),
+					ValueFrom: c.getParameterStorePathForConfigMap(namespace, env.ValueFrom.ConfigMapKeyRef.Name, env.ValueFrom.ConfigMapKeyRef.Key),
 				}
 				secrets = append(secrets, secret)
 			} else if env.ValueFrom.FieldRef != nil || env.ValueFrom.ResourceFieldRef != nil {
@@ -257,12 +257,18 @@ func (c *Converter) convertEnvironment(container corev1.Container, containerDef 
 	return nil
 }
 
-func (c *Converter) getParameterStorePathForSecret(secretName, key string) string {
-	return fmt.Sprintf("%s/secrets/%s/%s", c.options.ParameterStorePrefix, secretName, key)
+func (c *Converter) getParameterStorePathForSecret(namespace, secretName, key string) string {
+	if namespace == "" {
+		namespace = "default"
+	}
+	return fmt.Sprintf("%s/%s/secrets/%s/%s", c.options.ParameterStorePrefix, namespace, secretName, key)
 }
 
-func (c *Converter) getParameterStorePathForConfigMap(configMapName, key string) string {
-	return fmt.Sprintf("%s/configmaps/%s/%s", c.options.ParameterStorePrefix, configMapName, key)
+func (c *Converter) getParameterStorePathForConfigMap(namespace, configMapName, key string) string {
+	if namespace == "" {
+		namespace = "default"
+	}
+	return fmt.Sprintf("%s/%s/configmaps/%s/%s", c.options.ParameterStorePrefix, namespace, configMapName, key)
 }
 
 func (c *Converter) convertVolumes(volumes []corev1.Volume) ([]ECSVolume, error) {

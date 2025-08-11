@@ -19,6 +19,7 @@ func main() {
 		inputFile            = flag.String("input", "", "Input YAML file containing Kubernetes Pod specification")
 		outputFile           = flag.String("output", "", "Output JSON file for ECS task definition (default: stdout)")
 		family               = flag.String("family", "", "ECS task definition family name (required)")
+		namespace            = flag.String("namespace", "", "Kubernetes namespace (extracted from Pod metadata if not specified)")
 		parameterStorePrefix = flag.String("parameter-store-prefix", "/pods", "Prefix for Parameter Store parameters")
 		executionRoleArn     = flag.String("execution-role-arn", "", "ECS execution role ARN")
 		taskRoleArn          = flag.String("task-role-arn", "", "ECS task role ARN")
@@ -80,8 +81,17 @@ func main() {
 
 	converter := ecs.NewConverter(options)
 
+	// Determine namespace
+	ns := *namespace
+	if ns == "" {
+		ns = pod.Namespace
+	}
+	if ns == "" {
+		ns = "default"
+	}
+
 	// Convert to ECS task definition
-	taskDef, err := ecs.ConvertFromPod(converter, &pod, ecsConfig)
+	taskDef, err := converter.Convert(&pod.Spec, ecsConfig, ns)
 	if err != nil {
 		log.Fatalf("Failed to convert: %v", err)
 	}

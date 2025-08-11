@@ -70,15 +70,15 @@ tags:
 Before running the converted task, make sure to set up Parameter Store parameters:
 
 ```bash
-# Store secrets
+# Store secrets (for production namespace)
 aws ssm put-parameter \
-  --name "/webapp/secrets/database-credentials/password" \
+  --name "/webapp/production/secrets/database-credentials/password" \
   --value "your-db-password" \
   --type "SecureString"
 
-# Store config maps
+# Store config maps (for production namespace)
 aws ssm put-parameter \
-  --name "/webapp/configmaps/api-configuration/config.json" \
+  --name "/webapp/production/configmaps/api-configuration/config.json" \
   --value '{"api_url": "https://api.example.com"}' \
   --type "String"
 ```

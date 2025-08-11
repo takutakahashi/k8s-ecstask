@@ -19,10 +19,10 @@ type PodWithECSConfig struct {
 
 // ConvertFromPod converts a standard Kubernetes Pod and ECSConfig to ECS Task Definition
 func ConvertFromPod(converter *Converter, pod *corev1.Pod, ecsConfig *ECSConfig) (*ECSTaskDefinition, error) {
-	return converter.Convert(&pod.Spec, ecsConfig)
+	return converter.Convert(&pod.Spec, ecsConfig, pod.Namespace)
 }
 
 // ConvertFromPodWithConfig converts a PodWithECSConfig to ECS Task Definition
 func ConvertFromPodWithConfig(converter *Converter, podWithConfig *PodWithECSConfig) (*ECSTaskDefinition, error) {
-	return converter.Convert(&podWithConfig.Spec, &podWithConfig.ECSConfig)
+	return converter.Convert(&podWithConfig.Spec, &podWithConfig.ECSConfig, podWithConfig.Namespace)
 }

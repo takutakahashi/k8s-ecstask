@@ -140,11 +140,11 @@ func TestConverter_Convert(t *testing.T) {
 						Secrets: []ECSSecret{
 							{
 								Name:      "SECRET_VAR",
-								ValueFrom: "/myapp/secrets/my-secret/password",
+								ValueFrom: "/myapp/test-namespace/secrets/my-secret/password",
 							},
 							{
 								Name:      "CONFIG_VAR",
-								ValueFrom: "/myapp/configmaps/my-config/config-key",
+								ValueFrom: "/myapp/test-namespace/configmaps/my-config/config-key",
 							},
 						},
 						LogConfiguration: &ECSLogConfiguration{
@@ -187,7 +187,7 @@ func TestConverter_Convert(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := NewConverter(tt.options)
-			got, err := c.Convert(tt.podSpec, tt.ecsConfig)
+			got, err := c.Convert(tt.podSpec, tt.ecsConfig, "test-namespace")
 			
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Converter.Convert() error = %v, wantErr %v", err, tt.wantErr)
