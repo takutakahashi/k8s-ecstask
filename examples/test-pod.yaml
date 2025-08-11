@@ -16,7 +16,7 @@ kind: Pod
 metadata:
   name: blocked-pod
   labels:
-    example.com/watch: "true"
+    ecs.takutakahashi.dev/watch: "true"
 spec:
   containers:
   - name: nginx

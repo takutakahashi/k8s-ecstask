@@ -63,7 +63,7 @@ func (r *PodWatcherReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	labelPredicate := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			if pod, ok := e.Object.(*corev1.Pod); ok {
-				if _, exists := pod.Labels["example.com/watch"]; exists {
+				if _, exists := pod.Labels["ecs.takutakahashi.dev/watch"]; exists {
 					logf.Log.Info("Pod with watch label created", "namespace", pod.Namespace, "name", pod.Name)
 					return true
 				}
@@ -72,7 +72,7 @@ func (r *PodWatcherReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			if pod, ok := e.ObjectNew.(*corev1.Pod); ok {
-				if _, exists := pod.Labels["example.com/watch"]; exists {
+				if _, exists := pod.Labels["ecs.takutakahashi.dev/watch"]; exists {
 					return true
 				}
 			}
@@ -80,7 +80,7 @@ func (r *PodWatcherReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			if pod, ok := e.Object.(*corev1.Pod); ok {
-				if _, exists := pod.Labels["example.com/watch"]; exists {
+				if _, exists := pod.Labels["ecs.takutakahashi.dev/watch"]; exists {
 					logf.Log.Info("Pod with watch label deleted", "namespace", pod.Namespace, "name", pod.Name)
 					return true
 				}

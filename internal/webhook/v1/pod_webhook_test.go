@@ -55,7 +55,7 @@ var _ = Describe("Pod Webhook", func() {
 					Name:      "test-pod",
 					Namespace: "default",
 					Labels: map[string]string{
-						"example.com/watch": "true",
+						"ecs.takutakahashi.dev/watch": "true",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -73,7 +73,7 @@ var _ = Describe("Pod Webhook", func() {
 
 			By("checking that the Pod creation is blocked")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("pods with label 'example.com/watch' are not allowed"))
+			Expect(err.Error()).To(ContainSubstring("pods with label 'ecs.takutakahashi.dev/watch' are not allowed"))
 		})
 
 		It("Should also block Pod with watch label and additional annotations", func() {
@@ -83,8 +83,8 @@ var _ = Describe("Pod Webhook", func() {
 					Name:      "blocked-pod",
 					Namespace: "default",
 					Labels: map[string]string{
-						"example.com/watch": "true",
-						"app":               "test",
+						"ecs.takutakahashi.dev/watch": "true",
+						"app":                         "test",
 					},
 					Annotations: map[string]string{
 						"some-annotation": "value",
@@ -105,7 +105,7 @@ var _ = Describe("Pod Webhook", func() {
 
 			By("checking that the Pod creation is blocked")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("pods with label 'example.com/watch' are not allowed"))
+			Expect(err.Error()).To(ContainSubstring("pods with label 'ecs.takutakahashi.dev/watch' are not allowed"))
 		})
 
 		It("Should ignore Pod without watch label", func() {

@@ -3,14 +3,14 @@
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
 cliVersion: 4.7.1
-domain: example.com
+domain: ecs.takutakahashi.dev
 layout:
 - go.kubebuilder.io/v4
 projectName: pod-controller
-repo: github.com/example/pod-controller
+repo: github.com/takutakahashi/k8s-ecstask
 resources:
 - controller: true
-  domain: example.com
+  domain: ecs.takutakahashi.dev
   group: controller
   kind: PodWatcher
   version: v1
