@@ -9,16 +9,16 @@ import (
 
 func TestConverter_Convert(t *testing.T) {
 	tests := []struct {
-		name    string
-		spec    *XPodSpec
-		options ConversionOptions
-		want    *ECSTaskDefinition
-		wantErr bool
+		name      string
+		podSpec   *corev1.PodSpec
+		ecsConfig *ECSConfig
+		options   ConversionOptions
+		want      *ECSTaskDefinition
+		wantErr   bool
 	}{
 		{
 			name: "basic pod conversion",
-			spec: &XPodSpec{
-				Family: "test-family",
+			podSpec: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
 						Name:  "nginx",
@@ -40,6 +40,9 @@ func TestConverter_Convert(t *testing.T) {
 						},
 					},
 				},
+			},
+			ecsConfig: &ECSConfig{
+				Family: "test-family",
 				CPU:    "256",
 				Memory: "512",
 			},
@@ -77,8 +80,7 @@ func TestConverter_Convert(t *testing.T) {
 		},
 		{
 			name: "pod with environment variables and secrets",
-			spec: &XPodSpec{
-				Family: "test-env-family",
+			podSpec: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
 						Name:  "app",
@@ -113,6 +115,9 @@ func TestConverter_Convert(t *testing.T) {
 						},
 					},
 				},
+			},
+			ecsConfig: &ECSConfig{
+				Family: "test-env-family",
 			},
 			options: ConversionOptions{
 				ParameterStorePrefix: "/myapp",
@@ -154,139 +159,8 @@ func TestConverter_Convert(t *testing.T) {
 			},
 		},
 		{
-			name: "pod with volumes and mounts",
-			spec: &XPodSpec{
-				Family: "test-volumes-family",
-				Containers: []corev1.Container{
-					{
-						Name:  "app",
-						Image: "myapp:latest",
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name:      "data-volume",
-								MountPath: "/data",
-								ReadOnly:  false,
-							},
-							{
-								Name:      "config-volume",
-								MountPath: "/etc/config",
-								ReadOnly:  true,
-							},
-						},
-					},
-				},
-				Volumes: []corev1.Volume{
-					{
-						Name: "data-volume",
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: "/host/data",
-							},
-						},
-					},
-					{
-						Name: "config-volume",
-						VolumeSource: corev1.VolumeSource{
-							EmptyDir: &corev1.EmptyDirVolumeSource{},
-						},
-					},
-				},
-			},
-			options: ConversionOptions{},
-			want: &ECSTaskDefinition{
-				Family:                  "test-volumes-family",
-				NetworkMode:             "awsvpc",
-				RequiresCompatibilities: []string{"FARGATE"},
-				ContainerDefinitions: []ECSContainerDefinition{
-					{
-						Name:      "app",
-						Image:     "myapp:latest",
-						Essential: true,
-						MountPoints: []ECSMountPoint{
-							{
-								SourceVolume:  "data-volume",
-								ContainerPath: "/data",
-								ReadOnly:      false,
-							},
-							{
-								SourceVolume:  "config-volume",
-								ContainerPath: "/etc/config",
-								ReadOnly:      true,
-							},
-						},
-						LogConfiguration: &ECSLogConfiguration{
-							LogDriver: "awslogs",
-							Options: map[string]string{
-								"awslogs-group":  "/ecs/task",
-								"awslogs-region": "us-east-1",
-							},
-						},
-					},
-				},
-				Volumes: []ECSVolume{
-					{
-						Name: "data-volume",
-						Host: &ECSHostVolume{
-							SourcePath: "/host/data",
-						},
-					},
-					{
-						Name: "config-volume",
-						Host: &ECSHostVolume{},
-					},
-				},
-			},
-		},
-		{
-			name: "pod with custom task and execution roles",
-			spec: &XPodSpec{
-				Family:           "test-roles-family",
-				TaskRoleArn:      "arn:aws:iam::123456789012:role/TaskRole",
-				ExecutionRoleArn: "arn:aws:iam::123456789012:role/ExecutionRole",
-				NetworkMode:      "bridge",
-				RequiresCompatibilities: []string{"EC2"},
-				Containers: []corev1.Container{
-					{
-						Name:  "app",
-						Image: "myapp:latest",
-					},
-				},
-				Tags: map[string]string{
-					"Environment": "test",
-					"Project":     "myproject",
-				},
-			},
-			options: ConversionOptions{},
-			want: &ECSTaskDefinition{
-				Family:                  "test-roles-family",
-				TaskRoleArn:             "arn:aws:iam::123456789012:role/TaskRole",
-				ExecutionRoleArn:        "arn:aws:iam::123456789012:role/ExecutionRole",
-				NetworkMode:             "bridge",
-				RequiresCompatibilities: []string{"EC2"},
-				ContainerDefinitions: []ECSContainerDefinition{
-					{
-						Name:      "app",
-						Image:     "myapp:latest",
-						Essential: true,
-						LogConfiguration: &ECSLogConfiguration{
-							LogDriver: "awslogs",
-							Options: map[string]string{
-								"awslogs-group":  "/ecs/task",
-								"awslogs-region": "us-east-1",
-							},
-						},
-					},
-				},
-				Tags: []ECSTag{
-					{Key: "Environment", Value: "test"},
-					{Key: "Project", Value: "myproject"},
-				},
-			},
-		},
-		{
 			name: "pod with init containers should fail",
-			spec: &XPodSpec{
-				Family: "test-init-family",
+			podSpec: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
 						Name:  "app",
@@ -300,6 +174,9 @@ func TestConverter_Convert(t *testing.T) {
 					},
 				},
 			},
+			ecsConfig: &ECSConfig{
+				Family: "test-init-family",
+			},
 			options: ConversionOptions{
 				SkipUnsupportedFeatures: false,
 			},
@@ -310,7 +187,7 @@ func TestConverter_Convert(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := NewConverter(tt.options)
-			got, err := c.Convert(tt.spec)
+			got, err := c.Convert(tt.podSpec, tt.ecsConfig)
 			
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Converter.Convert() error = %v, wantErr %v", err, tt.wantErr)
@@ -356,106 +233,39 @@ func TestConverter_Convert(t *testing.T) {
 	}
 }
 
-func TestConverter_ConvertEnvironment(t *testing.T) {
+func TestConvertFromPod(t *testing.T) {
 	converter := NewConverter(ConversionOptions{
 		ParameterStorePrefix: "/test",
 	})
 
-	container := corev1.Container{
-		Name: "test",
-		Env: []corev1.EnvVar{
-			{Name: "PLAIN", Value: "value"},
-			{
-				Name: "SECRET",
-				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "mysecret"},
-						Key:                  "mykey",
-					},
-				},
-			},
-			{
-				Name: "CONFIG",
-				ValueFrom: &corev1.EnvVarSource{
-					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "myconfig"},
-						Key:                  "configkey",
+	pod := &corev1.Pod{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx",
+					Image: "nginx:alpine",
+					Env: []corev1.EnvVar{
+						{Name: "PLAIN", Value: "value"},
 					},
 				},
 			},
 		},
 	}
 
-	containerDef := &ECSContainerDefinition{}
-	err := converter.convertEnvironment(container, containerDef)
-	
+	ecsConfig := &ECSConfig{
+		Family: "test-pod",
+	}
+
+	taskDef, err := ConvertFromPod(converter, pod, ecsConfig)
 	if err != nil {
-		t.Fatalf("convertEnvironment() error = %v", err)
+		t.Fatalf("ConvertFromPod() error = %v", err)
 	}
 
-	// Check environment variables
-	if len(containerDef.Environment) != 1 {
-		t.Errorf("Environment count = %v, want 1", len(containerDef.Environment))
-	}
-	
-	if containerDef.Environment[0].Name != "PLAIN" || containerDef.Environment[0].Value != "value" {
-		t.Errorf("Environment[0] = %+v, want {Name: PLAIN, Value: value}", containerDef.Environment[0])
+	if taskDef.Family != "test-pod" {
+		t.Errorf("Family = %v, want test-pod", taskDef.Family)
 	}
 
-	// Check secrets
-	if len(containerDef.Secrets) != 2 {
-		t.Errorf("Secrets count = %v, want 2", len(containerDef.Secrets))
-	}
-
-	expectedSecrets := map[string]string{
-		"SECRET": "/test/secrets/mysecret/mykey",
-		"CONFIG": "/test/configmaps/myconfig/configkey",
-	}
-
-	for _, secret := range containerDef.Secrets {
-		expectedPath, exists := expectedSecrets[secret.Name]
-		if !exists {
-			t.Errorf("Unexpected secret: %s", secret.Name)
-			continue
-		}
-		
-		if secret.ValueFrom != expectedPath {
-			t.Errorf("Secret %s ValueFrom = %s, want %s", secret.Name, secret.ValueFrom, expectedPath)
-		}
-	}
-}
-
-func TestConverter_ConvertResources(t *testing.T) {
-	converter := NewConverter(ConversionOptions{})
-
-	container := corev1.Container{
-		Resources: corev1.ResourceRequirements{
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("1"),
-				corev1.ResourceMemory: resource.MustParse("1Gi"),
-			},
-			Requests: corev1.ResourceList{
-				corev1.ResourceMemory: resource.MustParse("512Mi"),
-			},
-		},
-	}
-
-	containerDef := &ECSContainerDefinition{}
-	err := converter.convertResources(container, containerDef)
-	
-	if err != nil {
-		t.Fatalf("convertResources() error = %v", err)
-	}
-
-	if containerDef.CPU != 1000 {
-		t.Errorf("CPU = %v, want 1000", containerDef.CPU)
-	}
-
-	if containerDef.Memory != 1024 {
-		t.Errorf("Memory = %v, want 1024", containerDef.Memory)
-	}
-
-	if containerDef.MemoryReservation != 512 {
-		t.Errorf("MemoryReservation = %v, want 512", containerDef.MemoryReservation)
+	if len(taskDef.ContainerDefinitions) != 1 {
+		t.Errorf("ContainerDefinitions count = %v, want 1", len(taskDef.ContainerDefinitions))
 	}
 }

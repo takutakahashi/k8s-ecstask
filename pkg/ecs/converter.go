@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Converter handles the conversion from XPod spec to ECS task definition
+// Converter handles the conversion from Kubernetes Pod spec to ECS task definition
 type Converter struct {
 	options ConversionOptions
 }
@@ -25,7 +25,7 @@ func NewConverter(options ConversionOptions) *Converter {
 		}
 	}
 	if options.ParameterStorePrefix == "" {
-		options.ParameterStorePrefix = "/xpod"
+		options.ParameterStorePrefix = "/pods"
 	}
 	
 	return &Converter{
@@ -33,41 +33,41 @@ func NewConverter(options ConversionOptions) *Converter {
 	}
 }
 
-// Convert converts an XPodSpec to an ECS task definition
-func (c *Converter) Convert(spec *XPodSpec) (*ECSTaskDefinition, error) {
+// Convert converts a Kubernetes PodSpec and ECSConfig to an ECS task definition
+func (c *Converter) Convert(podSpec *corev1.PodSpec, ecsConfig *ECSConfig) (*ECSTaskDefinition, error) {
 	taskDef := &ECSTaskDefinition{
-		Family:                  spec.Family,
-		TaskRoleArn:            c.getTaskRoleArn(spec),
-		ExecutionRoleArn:       c.getExecutionRoleArn(spec),
-		NetworkMode:            c.getNetworkMode(spec),
-		RequiresCompatibilities: c.getRequiresCompatibilities(spec),
-		CPU:                    spec.CPU,
-		Memory:                 spec.Memory,
+		Family:                  ecsConfig.Family,
+		TaskRoleArn:            c.getTaskRoleArn(ecsConfig),
+		ExecutionRoleArn:       c.getExecutionRoleArn(ecsConfig),
+		NetworkMode:            c.getNetworkMode(ecsConfig),
+		RequiresCompatibilities: c.getRequiresCompatibilities(ecsConfig),
+		CPU:                    ecsConfig.CPU,
+		Memory:                 ecsConfig.Memory,
 	}
 
 	// Convert containers
-	containerDefs, err := c.convertContainers(spec.Containers, false)
+	containerDefs, err := c.convertContainers(podSpec.Containers, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert containers: %w", err)
 	}
 	taskDef.ContainerDefinitions = containerDefs
 
 	// Convert init containers (ECS doesn't support init containers directly)
-	if len(spec.InitContainers) > 0 && !c.options.SkipUnsupportedFeatures {
+	if len(podSpec.InitContainers) > 0 && !c.options.SkipUnsupportedFeatures {
 		return nil, fmt.Errorf("init containers are not supported in ECS")
 	}
 
 	// Convert volumes
-	volumes, err := c.convertVolumes(spec.Volumes)
+	volumes, err := c.convertVolumes(podSpec.Volumes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert volumes: %w", err)
 	}
 	taskDef.Volumes = volumes
 
 	// Convert tags
-	if len(spec.Tags) > 0 {
-		tags := make([]ECSTag, 0, len(spec.Tags))
-		for key, value := range spec.Tags {
+	if len(ecsConfig.Tags) > 0 {
+		tags := make([]ECSTag, 0, len(ecsConfig.Tags))
+		for key, value := range ecsConfig.Tags {
 			tags = append(tags, ECSTag{
 				Key:   key,
 				Value: value,
@@ -79,30 +79,30 @@ func (c *Converter) Convert(spec *XPodSpec) (*ECSTaskDefinition, error) {
 	return taskDef, nil
 }
 
-func (c *Converter) getTaskRoleArn(spec *XPodSpec) string {
-	if spec.TaskRoleArn != "" {
-		return spec.TaskRoleArn
+func (c *Converter) getTaskRoleArn(ecsConfig *ECSConfig) string {
+	if ecsConfig.TaskRoleArn != "" {
+		return ecsConfig.TaskRoleArn
 	}
 	return c.options.DefaultTaskRoleArn
 }
 
-func (c *Converter) getExecutionRoleArn(spec *XPodSpec) string {
-	if spec.ExecutionRoleArn != "" {
-		return spec.ExecutionRoleArn
+func (c *Converter) getExecutionRoleArn(ecsConfig *ECSConfig) string {
+	if ecsConfig.ExecutionRoleArn != "" {
+		return ecsConfig.ExecutionRoleArn
 	}
 	return c.options.DefaultExecutionRoleArn
 }
 
-func (c *Converter) getNetworkMode(spec *XPodSpec) string {
-	if spec.NetworkMode != "" {
-		return spec.NetworkMode
+func (c *Converter) getNetworkMode(ecsConfig *ECSConfig) string {
+	if ecsConfig.NetworkMode != "" {
+		return ecsConfig.NetworkMode
 	}
 	return "awsvpc"
 }
 
-func (c *Converter) getRequiresCompatibilities(spec *XPodSpec) []string {
-	if len(spec.RequiresCompatibilities) > 0 {
-		return spec.RequiresCompatibilities
+func (c *Converter) getRequiresCompatibilities(ecsConfig *ECSConfig) []string {
+	if len(ecsConfig.RequiresCompatibilities) > 0 {
+		return ecsConfig.RequiresCompatibilities
 	}
 	return []string{"FARGATE"}
 }

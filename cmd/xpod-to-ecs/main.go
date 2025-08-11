@@ -9,26 +9,36 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/takutakahashi/k8s-ecstask/pkg/ecs"
 )
 
 func main() {
 	var (
-		inputFile            = flag.String("input", "", "Input YAML file containing XPod specification")
+		inputFile            = flag.String("input", "", "Input YAML file containing Kubernetes Pod specification")
 		outputFile           = flag.String("output", "", "Output JSON file for ECS task definition (default: stdout)")
-		parameterStorePrefix = flag.String("parameter-store-prefix", "/xpod", "Prefix for Parameter Store parameters")
-		executionRoleArn     = flag.String("execution-role-arn", "", "Default execution role ARN")
-		taskRoleArn          = flag.String("task-role-arn", "", "Default task role ARN")
-		logGroup             = flag.String("log-group", "/ecs/task", "CloudWatch log group")
+		family               = flag.String("family", "", "ECS task definition family name (required)")
+		parameterStorePrefix = flag.String("parameter-store-prefix", "/pods", "Prefix for Parameter Store parameters")
+		executionRoleArn     = flag.String("execution-role-arn", "", "ECS execution role ARN")
+		taskRoleArn          = flag.String("task-role-arn", "", "ECS task role ARN")
+		networkMode          = flag.String("network-mode", "awsvpc", "ECS network mode")
+		cpu                  = flag.String("cpu", "", "Task-level CPU allocation")
+		memory               = flag.String("memory", "", "Task-level memory allocation")
+		logGroup             = flag.String("log-group", "/ecs/pods", "CloudWatch log group")
 		logRegion            = flag.String("log-region", "us-east-1", "AWS region for logs")
 		skipUnsupported      = flag.Bool("skip-unsupported", true, "Skip unsupported Kubernetes features")
 	)
 	flag.Parse()
 
 	if *inputFile == "" {
-		fmt.Fprintf(os.Stderr, "Usage: %s -input <yaml-file> [options]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s -input <yaml-file> -family <family-name> [options]\n", os.Args[0])
 		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	if *family == "" {
+		fmt.Fprintf(os.Stderr, "Error: -family is required\n")
 		os.Exit(1)
 	}
 
@@ -38,16 +48,21 @@ func main() {
 		log.Fatalf("Failed to read input file: %v", err)
 	}
 
-	// Parse YAML
-	var xpodSpecYAML ecs.XPodSpecYAML
-	if err := yaml.Unmarshal(data, &xpodSpecYAML); err != nil {
-		log.Fatalf("Failed to parse YAML: %v", err)
+	// Parse YAML as Kubernetes Pod
+	var pod corev1.Pod
+	if err := yaml.Unmarshal(data, &pod); err != nil {
+		log.Fatalf("Failed to parse Kubernetes Pod YAML: %v", err)
 	}
 
-	// Convert to XPodSpec
-	xpodSpec, err := xpodSpecYAML.ToXPodSpec()
-	if err != nil {
-		log.Fatalf("Failed to convert YAML spec: %v", err)
+	// Create ECS configuration
+	ecsConfig := &ecs.ECSConfig{
+		Family:                  *family,
+		ExecutionRoleArn:        *executionRoleArn,
+		TaskRoleArn:            *taskRoleArn,
+		NetworkMode:            *networkMode,
+		RequiresCompatibilities: []string{"FARGATE"},
+		CPU:                    *cpu,
+		Memory:                 *memory,
 	}
 
 	// Create converter
@@ -66,7 +81,7 @@ func main() {
 	converter := ecs.NewConverter(options)
 
 	// Convert to ECS task definition
-	taskDef, err := converter.Convert(xpodSpec)
+	taskDef, err := ecs.ConvertFromPod(converter, &pod, ecsConfig)
 	if err != nil {
 		log.Fatalf("Failed to convert: %v", err)
 	}

@@ -1,28 +1,15 @@
 package ecs
 
-import (
-	corev1 "k8s.io/api/core/v1"
-)
-
-// XPodSpec represents the xpod specification
-type XPodSpec struct {
-	// Basic pod spec fields we support
-	Containers       []corev1.Container       `json:"containers"`
-	InitContainers   []corev1.Container       `json:"initContainers,omitempty"`
-	Volumes          []corev1.Volume          `json:"volumes,omitempty"`
-	ServiceAccount   string                   `json:"serviceAccountName,omitempty"`
-	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
-	RestartPolicy    corev1.RestartPolicy     `json:"restartPolicy,omitempty"`
-	
-	// ECS-specific metadata
-	Family              string            `json:"family"`
-	TaskRoleArn         string            `json:"taskRoleArn,omitempty"`
-	ExecutionRoleArn    string            `json:"executionRoleArn,omitempty"`
-	NetworkMode         string            `json:"networkMode,omitempty"`
-	RequiresCompatibilities []string      `json:"requiresCompatibilities,omitempty"`
-	CPU                 string            `json:"cpu,omitempty"`
-	Memory              string            `json:"memory,omitempty"`
-	Tags                map[string]string `json:"tags,omitempty"`
+// ECSConfig represents ECS-specific configuration for task definition
+type ECSConfig struct {
+	Family                  string            `json:"family"`
+	TaskRoleArn            string            `json:"taskRoleArn,omitempty"`
+	ExecutionRoleArn       string            `json:"executionRoleArn,omitempty"`
+	NetworkMode            string            `json:"networkMode,omitempty"`
+	RequiresCompatibilities []string          `json:"requiresCompatibilities,omitempty"`
+	CPU                    string            `json:"cpu,omitempty"`
+	Memory                 string            `json:"memory,omitempty"`
+	Tags                   map[string]string `json:"tags,omitempty"`
 }
 
 // ECSTaskDefinition represents the ECS task definition output
