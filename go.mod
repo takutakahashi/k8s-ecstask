@@ -1,4 +1,4 @@
-module github.com/example/pod-controller
+module github.com/takutakahashi/k8s-ecstask
 
 go 1.24.0
 

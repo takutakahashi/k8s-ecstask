@@ -34,7 +34,7 @@ var _ = Describe("PodWatcher Controller", func() {
 	Context("When reconciling Pods with watch label", func() {
 		ctx := context.Background()
 
-		It("should reconcile Pod with example.com/watch label", func() {
+		It("should reconcile Pod with ecs.takutakahashi.dev/watch label", func() {
 			podName := "test-pod-with-label"
 			namespace := defaultNamespace
 
@@ -43,7 +43,7 @@ var _ = Describe("PodWatcher Controller", func() {
 					Name:      podName,
 					Namespace: namespace,
 					Labels: map[string]string{
-						"example.com/watch": "true",
+						"ecs.takutakahashi.dev/watch": "true",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -66,7 +66,7 @@ var _ = Describe("PodWatcher Controller", func() {
 				return err == nil
 			}, time.Second*10, time.Millisecond*250).Should(BeTrue())
 
-			Expect(createdPod.Labels["example.com/watch"]).Should(Equal("true"))
+			Expect(createdPod.Labels["ecs.takutakahashi.dev/watch"]).Should(Equal("true"))
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: podLookupKey,
@@ -113,7 +113,7 @@ var _ = Describe("PodWatcher Controller", func() {
 				return err == nil
 			}, time.Second*10, time.Millisecond*250).Should(BeTrue())
 
-			Expect(createdPod.Labels["example.com/watch"]).Should(BeEmpty())
+			Expect(createdPod.Labels["ecs.takutakahashi.dev/watch"]).Should(BeEmpty())
 
 			Expect(k8sClient.Delete(ctx, pod)).Should(Succeed())
 		})
@@ -127,7 +127,7 @@ var _ = Describe("PodWatcher Controller", func() {
 					Name:      podName,
 					Namespace: namespace,
 					Labels: map[string]string{
-						"example.com/watch": "true",
+						"ecs.takutakahashi.dev/watch": "true",
 					},
 				},
 				Spec: corev1.PodSpec{

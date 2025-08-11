@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/example/pod-controller/test/utils"
+	"github.com/takutakahashi/k8s-ecstask/test/utils"
 )
 
 // namespace where the project is deployed in

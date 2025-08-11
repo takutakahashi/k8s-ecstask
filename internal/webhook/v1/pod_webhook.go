@@ -62,9 +62,9 @@ func (d *PodCustomDefaulter) Default(_ context.Context, obj runtime.Object) erro
 	}
 
 	// Check if Pod has the watch label - if so, block its creation
-	if _, hasWatchLabel := pod.Labels["example.com/watch"]; hasWatchLabel {
+	if _, hasWatchLabel := pod.Labels["ecs.takutakahashi.dev/watch"]; hasWatchLabel {
 		podlog.Info("Blocking Pod creation due to watch label", "name", pod.GetName(), "namespace", pod.GetNamespace())
-		return fmt.Errorf("pod creation blocked: pods with label 'example.com/watch' are not allowed")
+		return fmt.Errorf("pod creation blocked: pods with label 'ecs.takutakahashi.dev/watch' are not allowed")
 	}
 
 	return nil

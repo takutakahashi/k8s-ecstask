@@ -3,10 +3,10 @@
 KubebuilderとMutating Webhookを使用して実装したPod制御システムです。
 
 ## 概要
-このシステムは、Kubernetesクラスター内で`example.com/watch`ラベルを持つPodの作成を完全にブロックします。MutatingWebhookを使用してPod作成時に介入し、特定ラベルを持つPodの作成を拒否します。
+このシステムは、Kubernetesクラスター内で`ecs.takutakahashi.dev/watch`ラベルを持つPodの作成を完全にブロックします。MutatingWebhookを使用してPod作成時に介入し、特定ラベルを持つPodの作成を拒否します。
 
 ### 主な機能
-- **Pod作成ブロック**: `example.com/watch`ラベルを持つPodの作成を完全に拒否
+- **Pod作成ブロック**: `ecs.takutakahashi.dev/watch`ラベルを持つPodの作成を完全に拒否
 - **選択的制御**: 特定ラベルを持たないPodは通常通り作成を許可
 - **ログ記録**: ブロックされたPodの情報をログに出力
 - **コントローラー監視**: Pod作成・削除イベントのログ記録
