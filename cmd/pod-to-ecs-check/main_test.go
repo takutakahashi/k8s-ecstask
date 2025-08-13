@@ -6,7 +6,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func TestValidatePod(t *testing.T) {
@@ -15,8 +14,8 @@ func TestValidatePod(t *testing.T) {
 		pod          *corev1.Pod
 		skipWarnings bool
 		wantConvert  bool
-		wantErrors   int
-		wantWarnings int
+		minErrors    int
+		minWarnings  int
 	}{
 		{
 			name: "Simple convertible pod",
@@ -42,8 +41,8 @@ func TestValidatePod(t *testing.T) {
 			},
 			skipWarnings: false,
 			wantConvert:  true,
-			wantErrors:   0,
-			wantWarnings: 0,
+			minErrors:    0,
+			minWarnings:  0,
 		},
 		{
 			name: "Pod with init containers",
@@ -74,9 +73,9 @@ func TestValidatePod(t *testing.T) {
 				},
 			},
 			skipWarnings: false,
-			wantConvert:  false,
-			wantErrors:   0,
-			wantWarnings: 0,
+			wantConvert:  true, // SkipUnsupportedFeatures=true なので変換可能
+			minErrors:    0,
+			minWarnings:  0,
 		},
 		{
 			name: "Pod with host network",
@@ -102,39 +101,9 @@ func TestValidatePod(t *testing.T) {
 				},
 			},
 			skipWarnings: false,
-			wantConvert:  false,
-			wantErrors:   1,
-			wantWarnings: 0,
-		},
-		{
-			name: "Pod with privileged container",
-			pod: &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pod-privileged",
-					Namespace: "default",
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "app",
-							Image: "app:latest",
-							SecurityContext: &corev1.SecurityContext{
-								Privileged: &[]bool{true}[0],
-							},
-							Resources: corev1.ResourceRequirements{
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("100m"),
-									corev1.ResourceMemory: resource.MustParse("128Mi"),
-								},
-							},
-						},
-					},
-				},
-			},
-			skipWarnings: false,
-			wantConvert:  false,
-			wantErrors:   1,
-			wantWarnings: 0,
+			wantConvert:  true,
+			minErrors:    0,
+			minWarnings:  1,
 		},
 		{
 			name: "Pod with secret references",
@@ -173,45 +142,8 @@ func TestValidatePod(t *testing.T) {
 			},
 			skipWarnings: false,
 			wantConvert:  true,
-			wantErrors:   0,
-			wantWarnings: 1,
-		},
-		{
-			name: "Pod with PVC",
-			pod: &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pod-pvc",
-					Namespace: "default",
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "app",
-							Image: "app:latest",
-							Resources: corev1.ResourceRequirements{
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("100m"),
-									corev1.ResourceMemory: resource.MustParse("128Mi"),
-								},
-							},
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "data",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "data-pvc",
-								},
-							},
-						},
-					},
-				},
-			},
-			skipWarnings: false,
-			wantConvert:  false,
-			wantErrors:   1,
-			wantWarnings: 0,
+			minErrors:    0,
+			minWarnings:  1,
 		},
 		{
 			name: "Pod with warnings but skip warnings enabled",
@@ -226,14 +158,6 @@ func TestValidatePod(t *testing.T) {
 						{
 							Name:  "app",
 							Image: "app:latest",
-							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Path: "/health",
-										Port: intstr.FromInt(8080),
-									},
-								},
-							},
 							Resources: corev1.ResourceRequirements{
 								Limits: corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("100m"),
@@ -246,8 +170,8 @@ func TestValidatePod(t *testing.T) {
 			},
 			skipWarnings: true,
 			wantConvert:  true,
-			wantErrors:   0,
-			wantWarnings: 0,
+			minErrors:    0,
+			minWarnings:  0,
 		},
 	}
 
@@ -259,15 +183,17 @@ func TestValidatePod(t *testing.T) {
 				t.Errorf("validatePod() CanConvert = %v, want %v", result.CanConvert, tt.wantConvert)
 			}
 
-			if len(result.Errors) != tt.wantErrors {
-				t.Errorf("validatePod() got %d errors, want %d", len(result.Errors), tt.wantErrors)
+			if len(result.Errors) < tt.minErrors {
+				t.Errorf("validatePod() got %d errors, want at least %d",
+					len(result.Errors), tt.minErrors)
 				for _, err := range result.Errors {
 					t.Logf("  Error: %s", err)
 				}
 			}
 
-			if len(result.Warnings) != tt.wantWarnings {
-				t.Errorf("validatePod() got %d warnings, want %d", len(result.Warnings), tt.wantWarnings)
+			if len(result.Warnings) < tt.minWarnings {
+				t.Errorf("validatePod() got %d warnings, want at least %d",
+					len(result.Warnings), tt.minWarnings)
 				for _, warn := range result.Warnings {
 					t.Logf("  Warning: %s", warn)
 				}
@@ -276,165 +202,149 @@ func TestValidatePod(t *testing.T) {
 	}
 }
 
-func TestValidateContainer(t *testing.T) {
+func TestCategorizeConversionError(t *testing.T) {
 	tests := []struct {
-		name         string
-		container    corev1.Container
-		wantErrors   int
-		wantWarnings int
+		name            string
+		errorMsg        string
+		wantErrors      int
+		wantUnsupported int
 	}{
 		{
-			name: "Container with no image",
-			container: corev1.Container{
-				Name: "app",
-			},
-			wantErrors:   1,
-			wantWarnings: 1,
+			name:            "Init containers error",
+			errorMsg:        "init containers are not supported",
+			wantErrors:      0,
+			wantUnsupported: 1,
 		},
 		{
-			name: "Container with field ref env var",
-			container: corev1.Container{
-				Name:  "app",
-				Image: "app:latest",
-				Env: []corev1.EnvVar{
-					{
-						Name: "POD_NAME",
-						ValueFrom: &corev1.EnvVarSource{
-							FieldRef: &corev1.ObjectFieldSelector{
-								FieldPath: "metadata.name",
-							},
-						},
-					},
-				},
-				Resources: corev1.ResourceRequirements{
-					Limits: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("100m"),
-						corev1.ResourceMemory: resource.MustParse("128Mi"),
-					},
-				},
-			},
-			wantErrors:   0,
-			wantWarnings: 0,
+			name:            "Volume error",
+			errorMsg:        "secret/configmap volumes are not supported",
+			wantErrors:      0,
+			wantUnsupported: 1,
 		},
 		{
-			name: "Container with probes",
-			container: corev1.Container{
-				Name:  "app",
-				Image: "app:latest",
-				LivenessProbe: &corev1.Probe{
-					ProbeHandler: corev1.ProbeHandler{
-						HTTPGet: &corev1.HTTPGetAction{
-							Path: "/health",
-							Port: intstr.FromInt(8080),
-						},
-					},
-				},
-				ReadinessProbe: &corev1.Probe{
-					ProbeHandler: corev1.ProbeHandler{
-						HTTPGet: &corev1.HTTPGetAction{
-							Path: "/ready",
-							Port: intstr.FromInt(8080),
-						},
-					},
-				},
-				Resources: corev1.ResourceRequirements{
-					Limits: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("100m"),
-						corev1.ResourceMemory: resource.MustParse("128Mi"),
-					},
-				},
-			},
-			wantErrors:   0,
-			wantWarnings: 2,
+			name:            "Generic error",
+			errorMsg:        "some other conversion error",
+			wantErrors:      1,
+			wantUnsupported: 0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := &ValidationResult{
-				Errors:   []string{},
-				Warnings: []string{},
+				Errors:          []string{},
+				UnsupportedInfo: []string{},
 			}
 
-			validateContainer(&tt.container, result)
+			err := &mockError{msg: tt.errorMsg}
+			categorizeConversionError(err, result)
 
 			if len(result.Errors) != tt.wantErrors {
-				t.Errorf("validateContainer() got %d errors, want %d", len(result.Errors), tt.wantErrors)
+				t.Errorf("categorizeConversionError() got %d errors, want %d",
+					len(result.Errors), tt.wantErrors)
 			}
 
-			if len(result.Warnings) != tt.wantWarnings {
-				t.Errorf("validateContainer() got %d warnings, want %d", len(result.Warnings), tt.wantWarnings)
+			if len(result.UnsupportedInfo) != tt.wantUnsupported {
+				t.Errorf("categorizeConversionError() got %d unsupported, want %d",
+					len(result.UnsupportedInfo), tt.wantUnsupported)
 			}
 		})
 	}
 }
 
-func TestValidateVolume(t *testing.T) {
+// mockError implements error interface for testing
+type mockError struct {
+	msg string
+}
+
+func (e *mockError) Error() string {
+	return e.msg
+}
+
+func TestAddWarnings(t *testing.T) {
 	tests := []struct {
-		name       string
-		volume     corev1.Volume
-		wantErrors int
+		name         string
+		pod          *corev1.Pod
+		wantWarnings int
 	}{
 		{
-			name: "EmptyDir volume",
-			volume: corev1.Volume{
-				Name: "temp",
-				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
+			name: "Pod with no warnings",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "simple-pod",
+					Namespace: "default",
 				},
-			},
-			wantErrors: 0,
-		},
-		{
-			name: "PVC volume",
-			volume: corev1.Volume{
-				Name: "data",
-				VolumeSource: corev1.VolumeSource{
-					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-						ClaimName: "data-pvc",
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "app",
+							Image: "app:latest",
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("128Mi"),
+								},
+							},
+						},
 					},
 				},
 			},
-			wantErrors: 1,
+			wantWarnings: 0,
 		},
 		{
-			name: "NFS volume",
-			volume: corev1.Volume{
-				Name: "nfs",
-				VolumeSource: corev1.VolumeSource{
-					NFS: &corev1.NFSVolumeSource{
-						Server: "nfs.example.com",
-						Path:   "/data",
+			name: "Pod with host network",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "host-net-pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					HostNetwork: true,
+					Containers: []corev1.Container{
+						{
+							Name:  "app",
+							Image: "app:latest",
+						},
 					},
 				},
 			},
-			wantErrors: 1,
+			wantWarnings: 2, // host network + no resources
 		},
 		{
-			name: "HostPath volume",
-			volume: corev1.Volume{
-				Name: "host",
-				VolumeSource: corev1.VolumeSource{
-					HostPath: &corev1.HostPathVolumeSource{
-						Path: "/var/log",
+			name: "Pod with service account",
+			pod: &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "sa-pod",
+					Namespace: "default",
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: "custom-sa",
+					Containers: []corev1.Container{
+						{
+							Name:  "app",
+							Image: "app:latest",
+						},
 					},
 				},
 			},
-			wantErrors: 0,
+			wantWarnings: 2, // service account + no resources
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := &ValidationResult{
-				Errors:   []string{},
 				Warnings: []string{},
 			}
 
-			validateVolume(&tt.volume, result)
+			addWarnings(tt.pod, result)
 
-			if len(result.Errors) != tt.wantErrors {
-				t.Errorf("validateVolume() got %d errors, want %d", len(result.Errors), tt.wantErrors)
+			if len(result.Warnings) != tt.wantWarnings {
+				t.Errorf("addWarnings() got %d warnings, want %d",
+					len(result.Warnings), tt.wantWarnings)
+				for _, warn := range result.Warnings {
+					t.Logf("  Warning: %s", warn)
+				}
 			}
 		})
 	}

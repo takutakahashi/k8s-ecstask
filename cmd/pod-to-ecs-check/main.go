@@ -7,14 +7,16 @@ import (
 	"fmt"
 	"log"
 	"os"
-
 	"path/filepath"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+
+	"github.com/takutakahashi/k8s-ecstask/pkg/ecs"
 )
 
 // ValidationResult represents the result of validating a single Pod
@@ -37,8 +39,10 @@ type ValidationSummary struct {
 
 func main() {
 	var (
-		namespace    = flag.String("namespace", "", "Kubernetes namespace to check (default: all namespaces)")
-		kubeconfig   = flag.String("kubeconfig", "", "Path to kubeconfig file (default: ~/.kube/config)")
+		namespace = flag.String("namespace", "",
+			"Kubernetes namespace to check (default: all namespaces)")
+		kubeconfig = flag.String("kubeconfig", "",
+			"Path to kubeconfig file (default: ~/.kube/config)")
 		outputFormat = flag.String("output", "text", "Output format: text or json")
 		skipWarnings = flag.Bool("skip-warnings", false, "Skip validation warnings")
 	)
@@ -116,54 +120,44 @@ func validatePod(pod *corev1.Pod, skipWarnings bool) ValidationResult {
 		UnsupportedInfo: []string{},
 	}
 
-	// Check for init containers
-	if len(pod.Spec.InitContainers) > 0 {
-		result.UnsupportedInfo = append(result.UnsupportedInfo,
-			fmt.Sprintf("Pod has %d init containers which are not directly supported in ECS", len(pod.Spec.InitContainers)))
+	// Create converter with default options
+	options := ecs.ConversionOptions{
+		ParameterStorePrefix: "/pods",
+		DefaultLogDriver:     "awslogs",
+		DefaultLogOptions: map[string]string{
+			"awslogs-group":  "/ecs/pods",
+			"awslogs-region": "us-east-1",
+		},
+		SkipUnsupportedFeatures: true,
+		DefaultExecutionRoleArn: "arn:aws:iam::123456789012:role/ecsTaskExecutionRole",
+		DefaultTaskRoleArn:      "arn:aws:iam::123456789012:role/ecsTaskRole",
+	}
+
+	converter := ecs.NewConverter(options)
+
+	// Create minimal ECS config for validation
+	ecsConfig := &ecs.ECSConfig{
+		Family:                  fmt.Sprintf("%s-%s", pod.Namespace, pod.Name),
+		RequiresCompatibilities: []string{"FARGATE"},
+		CPU:                     "256",
+		Memory:                  "512",
+	}
+
+	// Try to convert using the existing converter
+	namespace := pod.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	_, err := converter.Convert(&pod.Spec, ecsConfig, namespace)
+	if err != nil {
+		// Parse the error to categorize it
 		result.CanConvert = false
+		categorizeConversionError(err, &result)
 	}
 
-	// Validate containers
-	for _, container := range pod.Spec.Containers {
-		validateContainer(&container, &result)
-	}
-
-	// Validate volumes
-	for _, volume := range pod.Spec.Volumes {
-		validateVolume(&volume, &result)
-	}
-
-	// Check for unsupported pod features
-	if pod.Spec.HostNetwork {
-		result.Errors = append(result.Errors, "Pod uses host network mode which may require special ECS configuration")
-		result.CanConvert = false
-	}
-
-	if pod.Spec.HostPID {
-		result.Errors = append(result.Errors, "Pod uses host PID namespace which is not supported in ECS Fargate")
-		result.CanConvert = false
-	}
-
-	if pod.Spec.HostIPC {
-		result.Errors = append(result.Errors, "Pod uses host IPC namespace which is not supported in ECS Fargate")
-		result.CanConvert = false
-	}
-
-	// Check service account
-	if pod.Spec.ServiceAccountName != "" && pod.Spec.ServiceAccountName != "default" {
-		result.Warnings = append(result.Warnings,
-			fmt.Sprintf("Pod uses service account '%s' - ensure appropriate IAM roles are configured for ECS", pod.Spec.ServiceAccountName))
-	}
-
-	// Security context warnings
-	if pod.Spec.SecurityContext != nil {
-		if pod.Spec.SecurityContext.RunAsUser != nil {
-			result.Warnings = append(result.Warnings, "Pod specifies RunAsUser - ECS uses task role for permissions")
-		}
-		if pod.Spec.SecurityContext.FSGroup != nil {
-			result.Warnings = append(result.Warnings, "Pod specifies FSGroup - this is not directly supported in ECS")
-		}
-	}
+	// Additional validation checks for warnings
+	addWarnings(pod, &result)
 
 	// Apply skip warnings if requested
 	if skipWarnings && result.CanConvert {
@@ -173,93 +167,109 @@ func validatePod(pod *corev1.Pod, skipWarnings bool) ValidationResult {
 	return result
 }
 
-func validateContainer(container *corev1.Container, result *ValidationResult) {
-	// Check for required fields
-	if container.Image == "" {
-		result.Errors = append(result.Errors, fmt.Sprintf("Container '%s' has no image specified", container.Name))
-		result.CanConvert = false
+func categorizeConversionError(err error, result *ValidationResult) {
+	errStr := err.Error()
+
+	// Check for specific error patterns
+	if strings.Contains(errStr, "init containers") {
+		result.UnsupportedInfo = append(result.UnsupportedInfo,
+			"Pod has init containers which are not directly supported in ECS")
 	}
 
-	// Check environment variables
-	for _, env := range container.Env {
-		if env.ValueFrom != nil {
-			if env.ValueFrom.FieldRef != nil {
-				result.UnsupportedInfo = append(result.UnsupportedInfo,
-					fmt.Sprintf("Container '%s' uses field reference for env var '%s' which is not supported", container.Name, env.Name))
-			}
-			if env.ValueFrom.ResourceFieldRef != nil {
-				result.UnsupportedInfo = append(result.UnsupportedInfo,
-					fmt.Sprintf("Container '%s' uses resource field reference for env var '%s' which is not supported", container.Name, env.Name))
-			}
-			if env.ValueFrom.SecretKeyRef != nil {
-				result.Warnings = append(result.Warnings,
-					fmt.Sprintf("Container '%s' references secret '%s' - ensure it's migrated to Parameter Store", container.Name, env.ValueFrom.SecretKeyRef.Name))
-			}
-			if env.ValueFrom.ConfigMapKeyRef != nil {
-				result.Warnings = append(result.Warnings,
-					fmt.Sprintf("Container '%s' references configmap '%s' - ensure it's migrated to Parameter Store", container.Name, env.ValueFrom.ConfigMapKeyRef.Name))
-			}
-		}
+	if strings.Contains(errStr, "secret/configmap volumes") {
+		result.UnsupportedInfo = append(result.UnsupportedInfo,
+			"Pod uses secret/configmap volumes - use Parameter Store instead")
 	}
 
-	// Check probes
-	if container.LivenessProbe != nil {
-		result.Warnings = append(result.Warnings,
-			fmt.Sprintf("Container '%s' has liveness probe - ECS health checks work differently", container.Name))
-	}
-	if container.ReadinessProbe != nil {
-		result.Warnings = append(result.Warnings,
-			fmt.Sprintf("Container '%s' has readiness probe - ECS uses target group health checks", container.Name))
+	if strings.Contains(errStr, "field references") {
+		result.UnsupportedInfo = append(result.UnsupportedInfo,
+			"Pod uses field references which are not supported in ECS")
 	}
 
-	// Check security context
-	if container.SecurityContext != nil {
-		if container.SecurityContext.Privileged != nil && *container.SecurityContext.Privileged {
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("Container '%s' requires privileged mode which is not supported in ECS Fargate", container.Name))
-			result.CanConvert = false
-		}
-		if container.SecurityContext.Capabilities != nil {
-			if len(container.SecurityContext.Capabilities.Add) > 0 {
-				result.Warnings = append(result.Warnings,
-					fmt.Sprintf("Container '%s' adds Linux capabilities - verify ECS task role permissions", container.Name))
-			}
-		}
+	if strings.Contains(errStr, "unsupported volume type") {
+		result.Errors = append(result.Errors,
+			"Pod uses unsupported volume types for ECS")
 	}
 
-	// Check resource limits
-	if container.Resources.Limits == nil && container.Resources.Requests == nil {
-		result.Warnings = append(result.Warnings,
-			fmt.Sprintf("Container '%s' has no resource limits/requests - ECS requires CPU and memory specification", container.Name))
+	// Generic error if no specific pattern matched
+	if len(result.Errors) == 0 && len(result.UnsupportedInfo) == 0 {
+		result.Errors = append(result.Errors,
+			fmt.Sprintf("Conversion failed: %s", errStr))
 	}
 }
 
-func validateVolume(volume *corev1.Volume, result *ValidationResult) {
-	if volume.PersistentVolumeClaim != nil {
-		result.Errors = append(result.Errors,
-			fmt.Sprintf("Volume '%s' uses PersistentVolumeClaim which is not supported in ECS", volume.Name))
-		result.CanConvert = false
-	}
+func addWarnings(pod *corev1.Pod, result *ValidationResult) {
+	// Check for potential issues that don't prevent conversion but should be noted
 
-	if volume.NFS != nil {
-		result.Errors = append(result.Errors,
-			fmt.Sprintf("Volume '%s' uses NFS which requires EFS configuration in ECS", volume.Name))
-		result.CanConvert = false
-	}
-
-	if volume.Secret != nil {
-		result.UnsupportedInfo = append(result.UnsupportedInfo,
-			fmt.Sprintf("Volume '%s' mounts secret '%s' - use Parameter Store or Secrets Manager instead", volume.Name, volume.Secret.SecretName))
-	}
-
-	if volume.ConfigMap != nil {
-		result.UnsupportedInfo = append(result.UnsupportedInfo,
-			fmt.Sprintf("Volume '%s' mounts configmap '%s' - use Parameter Store instead", volume.Name, volume.ConfigMap.Name))
-	}
-
-	if volume.HostPath != nil {
+	// Check for host networking
+	if pod.Spec.HostNetwork {
 		result.Warnings = append(result.Warnings,
-			fmt.Sprintf("Volume '%s' uses hostPath - ensure the path is available in ECS", volume.Name))
+			"Pod uses host network - ensure ECS task configuration supports this")
+	}
+
+	// Check for privileged containers
+	for _, container := range pod.Spec.Containers {
+		if container.SecurityContext != nil &&
+			container.SecurityContext.Privileged != nil &&
+			*container.SecurityContext.Privileged {
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Container '%s' requires privileged mode - "+
+					"not supported in ECS Fargate", container.Name))
+		}
+
+		// Check for missing resource specifications
+		if container.Resources.Limits == nil && container.Resources.Requests == nil {
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Container '%s' has no resource limits/requests - "+
+					"ECS requires CPU and memory specification", container.Name))
+		}
+
+		// Check for probes
+		if container.LivenessProbe != nil {
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Container '%s' has liveness probe - "+
+					"ECS health checks work differently", container.Name))
+		}
+		if container.ReadinessProbe != nil {
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Container '%s' has readiness probe - "+
+					"ECS uses target group health checks", container.Name))
+		}
+
+		// Check for secrets and configmaps in env vars
+		for _, env := range container.Env {
+			if env.ValueFrom != nil {
+				if env.ValueFrom.SecretKeyRef != nil {
+					result.Warnings = append(result.Warnings,
+						fmt.Sprintf("Container '%s' references secret '%s' - "+
+							"ensure it's migrated to Parameter Store",
+							container.Name, env.ValueFrom.SecretKeyRef.Name))
+				}
+				if env.ValueFrom.ConfigMapKeyRef != nil {
+					result.Warnings = append(result.Warnings,
+						fmt.Sprintf("Container '%s' references configmap '%s' - "+
+							"ensure it's migrated to Parameter Store",
+							container.Name, env.ValueFrom.ConfigMapKeyRef.Name))
+				}
+			}
+		}
+	}
+
+	// Check service account
+	if pod.Spec.ServiceAccountName != "" && pod.Spec.ServiceAccountName != "default" {
+		result.Warnings = append(result.Warnings,
+			fmt.Sprintf("Pod uses service account '%s' - "+
+				"ensure appropriate IAM roles are configured for ECS",
+				pod.Spec.ServiceAccountName))
+	}
+
+	// Check for volume types that need attention
+	for _, volume := range pod.Spec.Volumes {
+		if volume.HostPath != nil {
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Volume '%s' uses hostPath - "+
+					"ensure the path is available in ECS", volume.Name))
+		}
 	}
 }
 
@@ -312,7 +322,8 @@ func outputText(summary ValidationSummary) {
 
 	// Summary recommendations
 	if summary.FailedPods > 0 {
-		fmt.Printf("Summary: %d pods cannot be converted to ECS tasks without modifications.\n", summary.FailedPods)
+		fmt.Printf("Summary: %d pods cannot be converted to ECS tasks without modifications.\n",
+			summary.FailedPods)
 		fmt.Printf("Please review the errors above and modify the pod specifications accordingly.\n")
 	} else if summary.ConvertiblePods == summary.TotalPods {
 		fmt.Printf("Summary: All pods can be converted to ECS tasks!\n")
