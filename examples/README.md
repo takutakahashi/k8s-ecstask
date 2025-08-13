@@ -6,10 +6,10 @@ Build and run the converter:
 
 ```bash
 # Build the CLI tool
-go build -o bin/xpod-to-ecs ./cmd/xpod-to-ecs
+go build -o bin/pod-to-ecs ./cmd/pod-to-ecs
 
 # Convert a sample XPod spec to ECS task definition
-./bin/xpod-to-ecs \
+./bin/pod-to-ecs \
   -input examples/sample-xpod.yaml \
   -parameter-store-prefix "/webapp" \
   -log-region "ap-northeast-1" \

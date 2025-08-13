@@ -1,6 +1,6 @@
-# XPod to ECS Task Definition Converter
+# Pod to ECS Task Definition Converter
 
-このパッケージは、Kubernetes Pod仕様（XPod spec）をAmazon ECS Task Definitionに変換するGoライブラリです。シークレットとConfigMapはAWS Systems Manager Parameter Storeに保管されることを前提としています。
+このパッケージは、Kubernetes Pod仕様をAmazon ECS Task Definitionに変換するGoライブラリです。シークレットとConfigMapはAWS Systems Manager Parameter Storeに保管されることを前提としています。
 
 ## 特徴
 
