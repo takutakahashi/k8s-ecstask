@@ -188,12 +188,12 @@ func TestConverter_Convert(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := NewConverter(tt.options)
 			got, err := c.Convert(tt.podSpec, tt.ecsConfig, "test-namespace")
-			
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Converter.Convert() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if tt.wantErr {
 				return
 			}
@@ -202,29 +202,30 @@ func TestConverter_Convert(t *testing.T) {
 			if got.Family != tt.want.Family {
 				t.Errorf("Family = %v, want %v", got.Family, tt.want.Family)
 			}
-			
+
 			if got.NetworkMode != tt.want.NetworkMode {
 				t.Errorf("NetworkMode = %v, want %v", got.NetworkMode, tt.want.NetworkMode)
 			}
-			
+
 			if len(got.ContainerDefinitions) != len(tt.want.ContainerDefinitions) {
-				t.Errorf("ContainerDefinitions count = %v, want %v", len(got.ContainerDefinitions), len(tt.want.ContainerDefinitions))
+				t.Errorf("ContainerDefinitions count = %v, want %v",
+					len(got.ContainerDefinitions), len(tt.want.ContainerDefinitions))
 				return
 			}
-			
+
 			// Check first container definition
 			if len(got.ContainerDefinitions) > 0 {
 				gotContainer := got.ContainerDefinitions[0]
 				wantContainer := tt.want.ContainerDefinitions[0]
-				
+
 				if gotContainer.Name != wantContainer.Name {
 					t.Errorf("Container Name = %v, want %v", gotContainer.Name, wantContainer.Name)
 				}
-				
+
 				if gotContainer.Image != wantContainer.Image {
 					t.Errorf("Container Image = %v, want %v", gotContainer.Image, wantContainer.Image)
 				}
-				
+
 				if gotContainer.Essential != wantContainer.Essential {
 					t.Errorf("Container Essential = %v, want %v", gotContainer.Essential, wantContainer.Essential)
 				}

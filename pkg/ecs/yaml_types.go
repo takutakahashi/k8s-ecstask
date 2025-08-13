@@ -12,7 +12,7 @@ type PodWithECSConfig struct {
 	metav1.ObjectMeta `yaml:"metadata,omitempty"`
 	Spec              corev1.PodSpec   `yaml:"spec,omitempty"`
 	Status            corev1.PodStatus `yaml:"status,omitempty"`
-	
+
 	// ECS-specific configuration
 	ECSConfig ECSConfig `yaml:"ecsConfig,omitempty"`
 }

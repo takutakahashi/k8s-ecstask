@@ -16,10 +16,11 @@ import (
 
 func main() {
 	var (
-		inputFile            = flag.String("input", "", "Input YAML file containing Kubernetes Pod specification")
-		outputFile           = flag.String("output", "", "Output JSON file for ECS task definition (default: stdout)")
-		family               = flag.String("family", "", "ECS task definition family name (required)")
-		namespace            = flag.String("namespace", "", "Kubernetes namespace (extracted from Pod metadata if not specified)")
+		inputFile  = flag.String("input", "", "Input YAML file containing Kubernetes Pod specification")
+		outputFile = flag.String("output", "", "Output JSON file for ECS task definition (default: stdout)")
+		family     = flag.String("family", "", "ECS task definition family name (required)")
+		namespace  = flag.String("namespace", "",
+			"Kubernetes namespace (extracted from Pod metadata if not specified)")
 		parameterStorePrefix = flag.String("parameter-store-prefix", "/pods", "Prefix for Parameter Store parameters")
 		executionRoleArn     = flag.String("execution-role-arn", "", "ECS execution role ARN")
 		taskRoleArn          = flag.String("task-role-arn", "", "ECS task role ARN")
@@ -59,11 +60,11 @@ func main() {
 	ecsConfig := &ecs.ECSConfig{
 		Family:                  *family,
 		ExecutionRoleArn:        *executionRoleArn,
-		TaskRoleArn:            *taskRoleArn,
-		NetworkMode:            *networkMode,
+		TaskRoleArn:             *taskRoleArn,
+		NetworkMode:             *networkMode,
 		RequiresCompatibilities: []string{"FARGATE"},
-		CPU:                    *cpu,
-		Memory:                 *memory,
+		CPU:                     *cpu,
+		Memory:                  *memory,
 	}
 
 	// Create converter
@@ -109,7 +110,11 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to create output file: %v", err)
 		}
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil {
+				log.Printf("Failed to close output file: %v", err)
+			}
+		}()
 		output = file
 	}
 
@@ -117,8 +122,10 @@ func main() {
 		log.Fatalf("Failed to write output: %v", err)
 	}
 
-	fmt.Fprintln(output)
-	
+	if _, err := fmt.Fprintln(output); err != nil {
+		log.Printf("Failed to write newline: %v", err)
+	}
+
 	if *outputFile != "" {
 		fmt.Printf("ECS task definition written to %s\n", *outputFile)
 	}

@@ -6,8 +6,8 @@ import (
 	"log"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/takutakahashi/k8s-ecstask/pkg/ecs"
 )
@@ -169,7 +169,7 @@ func ExampleConverter_Convert_minimal() {
 	fmt.Printf("NetworkMode: %s\n", taskDef.NetworkMode)
 	fmt.Printf("Container Count: %d\n", len(taskDef.ContainerDefinitions))
 	fmt.Printf("Container Name: %s\n", taskDef.ContainerDefinitions[0].Name)
-	
+
 	// Output:
 	// Family: simple-app
 	// NetworkMode: awsvpc
