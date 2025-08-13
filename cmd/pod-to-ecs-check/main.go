@@ -7,16 +7,12 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 
 	"github.com/takutakahashi/k8s-ecstask/pkg/ecs"
+	"github.com/takutakahashi/k8s-ecstask/pkg/k8s"
 )
 
 // ValidationResult represents the result of validating a single Pod
@@ -48,34 +44,20 @@ func main() {
 	)
 	flag.Parse()
 
-	// Setup kubeconfig
-	if *kubeconfig == "" {
-		if home := homedir.HomeDir(); home != "" {
-			*kubeconfig = filepath.Join(home, ".kube", "config")
-		}
-	}
-
 	// Create Kubernetes client
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	client, err := k8s.NewClient(k8s.ClientConfig{
+		KubeconfigPath: *kubeconfig,
+	})
 	if err != nil {
-		log.Fatalf("Failed to build config: %v", err)
+		log.Fatalf("Failed to create k8s client: %v", err)
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
+	// Create pod service
+	podService := k8s.NewPodService(client)
 
 	// Get pods
 	ctx := context.Background()
-	var pods *corev1.PodList
-
-	if *namespace != "" {
-		pods, err = clientset.CoreV1().Pods(*namespace).List(ctx, metav1.ListOptions{})
-	} else {
-		pods, err = clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
-	}
-
+	pods, err := podService.ListPods(ctx, *namespace)
 	if err != nil {
 		log.Fatalf("Failed to list pods: %v", err)
 	}
