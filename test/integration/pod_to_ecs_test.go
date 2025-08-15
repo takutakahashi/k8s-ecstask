@@ -104,7 +104,7 @@ func runTest(
 	expectedChecks(t, taskDef)
 
 	// Common checks (skip compatibility check for annotation tests)
-	isAnnotationTest := strings.Contains(inputFile, "external-annotation") || 
+	isAnnotationTest := strings.Contains(inputFile, "external-annotation") ||
 		strings.Contains(inputFile, "mixed-compatibility")
 	checkCommonFields(t, taskDef, !isAnnotationTest)
 }
