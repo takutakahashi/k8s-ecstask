@@ -126,7 +126,8 @@ func checkCommonFields(t *testing.T, taskDef map[string]interface{}, checkDefaul
 	if taskDef["memory"] != "2048" {
 		t.Errorf("Expected memory '2048', got %v", taskDef["memory"])
 	}
-	if taskDef["networkMode"] != "awsvpc" {
+	// Only check default networkMode for non-annotation tests
+	if checkDefaultCompatibility && taskDef["networkMode"] != "awsvpc" {
 		t.Errorf("Expected networkMode 'awsvpc', got %v", taskDef["networkMode"])
 	}
 
@@ -277,6 +278,11 @@ func testPodWithExternal(t *testing.T, taskDef map[string]interface{}) {
 		t.Errorf("Expected requiresCompatibilities ['EXTERNAL'], got %v", compatibilities)
 	}
 
+	// Check that network mode is bridge for EXTERNAL compatibility
+	if taskDef["networkMode"] != "bridge" {
+		t.Errorf("Expected networkMode 'bridge' for EXTERNAL compatibility, got %v", taskDef["networkMode"])
+	}
+
 	// Check basic conversion works
 	containerDefs := taskDef["containerDefinitions"].([]interface{})
 	if len(containerDefs) != 1 {
@@ -314,4 +320,10 @@ func testPodWithMixedCompatibility(t *testing.T, taskDef map[string]interface{})
 			t.Errorf("Missing compatibility mode: %s", mode)
 		}
 	}
+
+	// Check that network mode is bridge when EXTERNAL compatibility is included
+	if taskDef["networkMode"] != "bridge" {
+		t.Errorf("Expected networkMode 'bridge' when EXTERNAL compatibility is included, got %v", taskDef["networkMode"])
+	}
+
 }

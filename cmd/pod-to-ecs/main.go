@@ -59,11 +59,22 @@ func main() {
 	}
 
 	// Create ECS configuration
+	var networkModePtr *string
+	if *networkMode != "awsvpc" {
+		// Only set if explicitly changed from default
+		networkModePtr = networkMode
+	}
+
 	ecsConfig := &ecs.ECSConfig{
-		Family:                  *family,
-		ExecutionRoleArn:        *executionRoleArn,
-		TaskRoleArn:             *taskRoleArn,
-		NetworkMode:             *networkMode,
+		Family:           *family,
+		ExecutionRoleArn: *executionRoleArn,
+		TaskRoleArn:      *taskRoleArn,
+		NetworkMode: func() string {
+			if networkModePtr != nil {
+				return *networkModePtr
+			}
+			return ""
+		}(),
 		RequiresCompatibilities: nil, // Let annotation logic determine compatibility
 		CPU:                     *cpu,
 		Memory:                  *memory,

@@ -49,12 +49,15 @@ func (c *Converter) ConvertPod(
 	ecsConfig *ECSConfig,
 	namespace string,
 ) (*ECSTaskDefinition, error) {
+	// Get compatibility requirements first to determine network mode
+	compatibilities := c.getRequiresCompatibilities(ecsConfig, pod)
+
 	taskDef := &ECSTaskDefinition{
 		Family:                  ecsConfig.Family,
 		TaskRoleArn:             c.getTaskRoleArn(ecsConfig),
 		ExecutionRoleArn:        c.getExecutionRoleArn(ecsConfig),
-		NetworkMode:             c.getNetworkMode(ecsConfig),
-		RequiresCompatibilities: c.getRequiresCompatibilities(ecsConfig, pod),
+		NetworkMode:             c.getNetworkMode(ecsConfig, compatibilities),
+		RequiresCompatibilities: compatibilities,
 		CPU:                     ecsConfig.CPU,
 		Memory:                  ecsConfig.Memory,
 	}
@@ -107,10 +110,18 @@ func (c *Converter) getExecutionRoleArn(ecsConfig *ECSConfig) string {
 	return c.options.DefaultExecutionRoleArn
 }
 
-func (c *Converter) getNetworkMode(ecsConfig *ECSConfig) string {
+func (c *Converter) getNetworkMode(ecsConfig *ECSConfig, compatibilities []string) string {
 	if ecsConfig.NetworkMode != "" {
 		return ecsConfig.NetworkMode
 	}
+
+	// Use bridge network mode for EXTERNAL compatibility
+	for _, compat := range compatibilities {
+		if strings.TrimSpace(compat) == "EXTERNAL" {
+			return "bridge"
+		}
+	}
+
 	return "awsvpc"
 }
 
