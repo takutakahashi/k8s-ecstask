@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -8,8 +9,8 @@ import (
 	"log"
 	"os"
 
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/takutakahashi/k8s-ecstask/pkg/ecs"
 )
@@ -50,19 +51,31 @@ func main() {
 		log.Fatalf("Failed to read input file: %v", err)
 	}
 
-	// Parse YAML as Kubernetes Pod
+	// Parse YAML as Kubernetes Pod using Kubernetes YAML decoder
 	var pod corev1.Pod
-	if err := yaml.Unmarshal(data, &pod); err != nil {
+	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 1024)
+	if err := decoder.Decode(&pod); err != nil {
 		log.Fatalf("Failed to parse Kubernetes Pod YAML: %v", err)
 	}
 
 	// Create ECS configuration
+	var networkModePtr *string
+	if *networkMode != "awsvpc" {
+		// Only set if explicitly changed from default
+		networkModePtr = networkMode
+	}
+
 	ecsConfig := &ecs.ECSConfig{
-		Family:                  *family,
-		ExecutionRoleArn:        *executionRoleArn,
-		TaskRoleArn:             *taskRoleArn,
-		NetworkMode:             *networkMode,
-		RequiresCompatibilities: []string{"FARGATE"},
+		Family:           *family,
+		ExecutionRoleArn: *executionRoleArn,
+		TaskRoleArn:      *taskRoleArn,
+		NetworkMode: func() string {
+			if networkModePtr != nil {
+				return *networkModePtr
+			}
+			return ""
+		}(),
+		RequiresCompatibilities: nil, // Let annotation logic determine compatibility
 		CPU:                     *cpu,
 		Memory:                  *memory,
 	}
@@ -92,7 +105,7 @@ func main() {
 	}
 
 	// Convert to ECS task definition
-	taskDef, err := converter.Convert(&pod.Spec, ecsConfig, ns)
+	taskDef, err := converter.ConvertPod(&pod, &pod.Spec, ecsConfig, ns)
 	if err != nil {
 		log.Fatalf("Failed to convert: %v", err)
 	}

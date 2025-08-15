@@ -1,0 +1,52 @@
+name: Pod to ECS Conversion Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Build pod-to-ecs binary
+      run: go build -v ./cmd/pod-to-ecs
+
+    - name: Run integration tests
+      run: go test -v ./test/integration
+
+    - name: Test pod-to-ecs conversion with simple pod
+      run: |
+        ./pod-to-ecs -input test/fixtures/simple-pod-unquoted.yaml -output simple-pod-output.json -family test-app
+        echo "Simple pod conversion output:"
+        cat simple-pod-output.json
+
+    - name: Test pod-to-ecs conversion with environment variables
+      run: |
+        ./pod-to-ecs -input test/fixtures/pod-with-env-unquoted.yaml -output env-pod-output.json -family test-app
+        echo "Environment pod conversion output:"
+        cat env-pod-output.json
+
+    - name: Test pod-to-ecs conversion with volumes
+      run: |
+        ./pod-to-ecs -input test/fixtures/pod-with-volumes-unquoted.yaml -output volumes-pod-output.json -family test-app
+        echo "Volumes pod conversion output:"
+        cat volumes-pod-output.json
+
+    - name: Verify output files exist
+      run: |
+        test -f simple-pod-output.json
+        test -f env-pod-output.json
+        test -f volumes-pod-output.json

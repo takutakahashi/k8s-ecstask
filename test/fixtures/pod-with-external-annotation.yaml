@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: external-pod
+  namespace: test-namespace
+  annotations:
+    ecs.takutakahashi.dev/requires-compatibilities: "EXTERNAL"
+spec:
+  containers:
+  - name: app
+    image: nginx:latest
+    ports:
+    - containerPort: 80
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
