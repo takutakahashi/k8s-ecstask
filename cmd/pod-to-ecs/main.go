@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -8,8 +9,8 @@ import (
 	"log"
 	"os"
 
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/takutakahashi/k8s-ecstask/pkg/ecs"
 )
@@ -50,9 +51,10 @@ func main() {
 		log.Fatalf("Failed to read input file: %v", err)
 	}
 
-	// Parse YAML as Kubernetes Pod
+	// Parse YAML as Kubernetes Pod using Kubernetes YAML decoder
 	var pod corev1.Pod
-	if err := yaml.Unmarshal(data, &pod); err != nil {
+	decoder := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 1024)
+	if err := decoder.Decode(&pod); err != nil {
 		log.Fatalf("Failed to parse Kubernetes Pod YAML: %v", err)
 	}
 
