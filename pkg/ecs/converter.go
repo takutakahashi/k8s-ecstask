@@ -33,8 +33,18 @@ func NewConverter(options ConversionOptions) *Converter {
 	}
 }
 
-// Convert converts a Kubernetes PodSpec and ECSConfig to an ECS task definition
+// Convert converts a Kubernetes Pod to an ECS task definition
 func (c *Converter) Convert(
+	podSpec *corev1.PodSpec,
+	ecsConfig *ECSConfig,
+	namespace string,
+) (*ECSTaskDefinition, error) {
+	return c.ConvertPod(nil, podSpec, ecsConfig, namespace)
+}
+
+// ConvertPod converts a Kubernetes Pod (with metadata) to an ECS task definition
+func (c *Converter) ConvertPod(
+	pod *corev1.Pod,
 	podSpec *corev1.PodSpec,
 	ecsConfig *ECSConfig,
 	namespace string,
@@ -44,7 +54,7 @@ func (c *Converter) Convert(
 		TaskRoleArn:             c.getTaskRoleArn(ecsConfig),
 		ExecutionRoleArn:        c.getExecutionRoleArn(ecsConfig),
 		NetworkMode:             c.getNetworkMode(ecsConfig),
-		RequiresCompatibilities: c.getRequiresCompatibilities(ecsConfig),
+		RequiresCompatibilities: c.getRequiresCompatibilities(ecsConfig, pod),
 		CPU:                     ecsConfig.CPU,
 		Memory:                  ecsConfig.Memory,
 	}
@@ -104,10 +114,18 @@ func (c *Converter) getNetworkMode(ecsConfig *ECSConfig) string {
 	return "awsvpc"
 }
 
-func (c *Converter) getRequiresCompatibilities(ecsConfig *ECSConfig) []string {
+func (c *Converter) getRequiresCompatibilities(ecsConfig *ECSConfig, pod *corev1.Pod) []string {
 	if len(ecsConfig.RequiresCompatibilities) > 0 {
 		return ecsConfig.RequiresCompatibilities
 	}
+
+	// Check for annotation-based compatibility requirements
+	if pod != nil && pod.Annotations != nil {
+		if compatibilities, exists := pod.Annotations["ecs.takutakahashi.dev/requires-compatibilities"]; exists {
+			return strings.Split(compatibilities, ",")
+		}
+	}
+
 	return []string{"FARGATE"}
 }
 

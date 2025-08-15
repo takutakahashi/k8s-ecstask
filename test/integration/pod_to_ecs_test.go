@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -40,6 +41,16 @@ func TestPodToECSConversion(t *testing.T) {
 			name:           "Pod with Volumes",
 			inputFile:      "../fixtures/pod-with-volumes-unquoted.yaml",
 			expectedChecks: testPodWithVolumes,
+		},
+		{
+			name:           "Pod with EXTERNAL annotation",
+			inputFile:      "../fixtures/pod-with-external-annotation.yaml",
+			expectedChecks: testPodWithExternal,
+		},
+		{
+			name:           "Pod with mixed compatibility",
+			inputFile:      "../fixtures/pod-with-mixed-compatibility.yaml",
+			expectedChecks: testPodWithMixedCompatibility,
 		},
 	}
 
@@ -92,11 +103,13 @@ func runTest(
 	// Run test-specific checks
 	expectedChecks(t, taskDef)
 
-	// Common checks
-	checkCommonFields(t, taskDef)
+	// Common checks (skip compatibility check for annotation tests)
+	isAnnotationTest := strings.Contains(inputFile, "external-annotation") || 
+		strings.Contains(inputFile, "mixed-compatibility")
+	checkCommonFields(t, taskDef, !isAnnotationTest)
 }
 
-func checkCommonFields(t *testing.T, taskDef map[string]interface{}) {
+func checkCommonFields(t *testing.T, taskDef map[string]interface{}, checkDefaultCompatibility bool) {
 	executionRole := "arn:aws:iam::123456789012:role/ecsTaskExecutionRole"
 	if taskDef["executionRoleArn"] != executionRole {
 		t.Errorf("Expected executionRoleArn %s, got %v", executionRole, taskDef["executionRoleArn"])
@@ -117,10 +130,12 @@ func checkCommonFields(t *testing.T, taskDef map[string]interface{}) {
 		t.Errorf("Expected networkMode 'awsvpc', got %v", taskDef["networkMode"])
 	}
 
-	// Check requiresCompatibilities
-	compatibilities := taskDef["requiresCompatibilities"].([]interface{})
-	if len(compatibilities) != 1 || compatibilities[0] != "FARGATE" {
-		t.Errorf("Expected requiresCompatibilities ['FARGATE'], got %v", compatibilities)
+	// Check requiresCompatibilities (default case)
+	if checkDefaultCompatibility {
+		compatibilities := taskDef["requiresCompatibilities"].([]interface{})
+		if len(compatibilities) != 1 || compatibilities[0] != "FARGATE" {
+			t.Errorf("Expected requiresCompatibilities ['FARGATE'], got %v", compatibilities)
+		}
 	}
 }
 
@@ -252,5 +267,51 @@ func testPodWithVolumes(t *testing.T, taskDef map[string]interface{}) {
 	// Check working directory
 	if container["workingDirectory"] != "/app" {
 		t.Errorf("Expected workingDirectory '/app', got %v", container["workingDirectory"])
+	}
+}
+
+func testPodWithExternal(t *testing.T, taskDef map[string]interface{}) {
+	// Check that EXTERNAL compatibility is set via annotation
+	compatibilities := taskDef["requiresCompatibilities"].([]interface{})
+	if len(compatibilities) != 1 || compatibilities[0] != "EXTERNAL" {
+		t.Errorf("Expected requiresCompatibilities ['EXTERNAL'], got %v", compatibilities)
+	}
+
+	// Check basic conversion works
+	containerDefs := taskDef["containerDefinitions"].([]interface{})
+	if len(containerDefs) != 1 {
+		t.Fatalf("Expected 1 container, got %d", len(containerDefs))
+	}
+
+	container := containerDefs[0].(map[string]interface{})
+	if container["name"] != "app" {
+		t.Errorf("Expected container name 'app', got %v", container["name"])
+	}
+	if container["image"] != "nginx:latest" {
+		t.Errorf("Expected image 'nginx:latest', got %v", container["image"])
+	}
+}
+
+func testPodWithMixedCompatibility(t *testing.T, taskDef map[string]interface{}) {
+	// Check that mixed compatibility is set via annotation
+	compatibilities := taskDef["requiresCompatibilities"].([]interface{})
+	if len(compatibilities) != 2 {
+		t.Fatalf("Expected 2 compatibility modes, got %d", len(compatibilities))
+	}
+
+	expectedCompat := map[string]bool{"FARGATE": false, "EXTERNAL": false}
+	for _, compat := range compatibilities {
+		compatStr := compat.(string)
+		if _, exists := expectedCompat[compatStr]; exists {
+			expectedCompat[compatStr] = true
+		} else {
+			t.Errorf("Unexpected compatibility mode: %s", compatStr)
+		}
+	}
+
+	for mode, found := range expectedCompat {
+		if !found {
+			t.Errorf("Missing compatibility mode: %s", mode)
+		}
 	}
 }

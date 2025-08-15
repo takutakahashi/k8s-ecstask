@@ -64,7 +64,7 @@ func main() {
 		ExecutionRoleArn:        *executionRoleArn,
 		TaskRoleArn:             *taskRoleArn,
 		NetworkMode:             *networkMode,
-		RequiresCompatibilities: []string{"FARGATE"},
+		RequiresCompatibilities: nil, // Let annotation logic determine compatibility
 		CPU:                     *cpu,
 		Memory:                  *memory,
 	}
@@ -94,7 +94,7 @@ func main() {
 	}
 
 	// Convert to ECS task definition
-	taskDef, err := converter.Convert(&pod.Spec, ecsConfig, ns)
+	taskDef, err := converter.ConvertPod(&pod, &pod.Spec, ecsConfig, ns)
 	if err != nil {
 		log.Fatalf("Failed to convert: %v", err)
 	}
